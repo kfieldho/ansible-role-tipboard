@@ -1,0 +1,3 @@
+---
+# If this variable remains empty, the default configuration is left alone
+tipboard_config_file: ""

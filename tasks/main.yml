@@ -1,0 +1,88 @@
+---
+# tasks file for kfieldho.influx
+#
+
+- name: Install Tipboard Apt Dependencies
+  become: True
+  become_user: root
+  apt: pkg={{ item }} state=installed update_cache=yes
+  with_items:
+      - redis-server
+      - redis-tools
+      - virtualenv
+      - build-essential
+
+- name: Create tipboard group
+  become: True
+  become_user: root
+  group:
+    name: tipboard
+    state: present
+
+- name: Create tipboad user
+  become: True
+  become_user: root
+  user:
+    name: tipboard
+    state: present
+    createhome: True
+    group: tipboard
+    shell: /bin/bash
+    skeleton: False
+
+- name: Install Tipboard Virtual Environment
+  become: True
+  become_user: root
+  pip:
+    name: [tipboard]
+    virtualenv: /home/tipboard/tboard
+    virtualenv_command: virtualenv
+
+- name: Set Ownership of Tipboard
+  become: True
+  become_user: root
+  file:
+    dest: /home/tipboard
+    owner: tipboard
+    group: tipboard
+
+- name: Pre-configure tipboard
+  become: True
+  become_user: tipboard
+  vars:
+    ansible_ssh_pipelining: true
+  command: /home/tipboard/tboard/bin/tipboard create_project base_configuration
+  args:
+    creates: "/home/tipboard/.tipboard/layout_config.yaml"
+
+- name: Install Tipboard Systemd Configuration
+  become: True
+  become_user: root
+  copy:
+    content: |
+      [Unit]
+      Description=Tipboard
+      After=network.target
+      [Service]
+      Type=simple
+      User=tipboard
+      ExecStart=/home/tipboard/tboard/bin/tipboard runserver 0.0.0.0 7272
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/tipboard.service
+
+- name: Copy over Tipboard configuration file
+  become: True
+  become_user: root
+  when: not (tipboard_config_file == "")
+  copy:
+    src: "{{ tipboard_config_file }}"
+    dest: /home/tipboard/.homeassistant/configuration.yaml
+    mode: 0755
+    group: homeassistant
+    owner: homeassistant
+
+- name: Enable Tipboard Service
+  become: True
+  become_user: root
+  systemd: name=tipboard.service enabled=true state=started daemon_reload=true
